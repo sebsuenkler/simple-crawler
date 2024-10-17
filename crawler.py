@@ -8,6 +8,8 @@ import inspect  # Used to inspect the current script's path
 from bs4 import BeautifulSoup  # Used to parse the HTML and extract text
 import re  # Regular expressions for cleaning up text
 import requests  # For handling HTTP requests
+import csv
+import sys
 
 
 # Define the path for configurations and extensions
@@ -185,7 +187,7 @@ def get_text(url):
         driver.quit()  # Close the WebDriver instance
 
 
-def crawl_url(url, dict_request):
+def crawl_url(url, dict_request, url_kw):
     """
     Crawls the given URL and extracts all 'href' attributes from anchor tags.
 
@@ -219,7 +221,7 @@ def crawl_url(url, dict_request):
             for href in hrefs:
                 if 'http' not in href:
                     href = main + href  # Handle relative URLs
-                if (main in href or main_www in href) and "javascript:void(0)" not in href and "mailto:" not in href:  # Only include URLs from the main domain
+                if (main in href or main_www in href) and "javascript:void(0)" not in href and "#" not in href and "mailto:" not in href and url_kw in href:  # Only include URLs from the main domain
                     urls.append(href)
             
             return list(dict.fromkeys(urls))  # Remove duplicates by converting list to dict then back to list
@@ -232,7 +234,7 @@ def crawl_url(url, dict_request):
         driver.quit()  # Close the WebDriver instance
 
 
-def crawl_sub_urls(urls, crawled_urls):
+def crawl_sub_urls(urls, crawled_urls, url_kw):
     """
     Recursively crawls sub-URLs found on a webpage, avoiding duplicates.
 
@@ -255,7 +257,7 @@ def crawl_sub_urls(urls, crawled_urls):
 
                     result_urls.append(url)  # Add URL to results
                     
-                    new_urls = crawl_url(url, dict_request)  # Crawl the URL and get new URLs
+                    new_urls = crawl_url(url, dict_request, url_kw)  # Crawl the URL and get new URLs
                     
                     crawled_urls.append(url)  # Mark URL as crawled
                     
@@ -269,23 +271,69 @@ def crawl_sub_urls(urls, crawled_urls):
 
 if __name__ == '__main__':
     # Initial URL to crawl
-    url = ["https://www.searchstudies.org"]
+
+    # Check if enough arguments are provided
+    if len(sys.argv) != 3:
+        print("Usage: python crawler.py <url> <url_kw>")
+        sys.exit(1)  # Exit with an error status
+
+    # Get the URL from the command-line argument
+    url = [sys.argv[1]]
+    url_kw = sys.argv[2]
+
+
+    file_name = url[0].replace("https://", "").replace("www.", "").replace(".html", "").replace("/","_").replace("#","_").replace("?","_")+".csv"                                                           
 
     dict_request = get_url_header(url[0])
 
-    # Level 0 URLs: Just the URLs from the given main URL
-    level_0_urls = crawl_url(url[0], dict_request)
-    crawled_level_0_urls = [url[0]]  # Store the main URL as already crawled
+    try:
+        # Level 0 URLs: Just the URLs from the given main URL
+        level_0_urls = crawl_url(url[0], dict_request, url_kw)
+        crawled_level_0_urls = [url[0]]  # Store the main URL as already crawled
+    except:
+        level_0_urls = []
+        crawled_level_0_urls = []
 
-    # Level 1 URLs: Crawl sub-URLs found on level 0 URLs
-    level_1_urls, crawled_level_1_urls = crawl_sub_urls(level_0_urls, crawled_level_0_urls)
+    try:
+        # Level 1 URLs: Crawl sub-URLs found on level 0 URLs
+        level_1_urls, crawled_level_1_urls = crawl_sub_urls(level_0_urls, crawled_level_0_urls, url_kw)
+    except:
+        level_1_urls = []
+        crawled_level_1_urls = []
 
-    # Level 2 URLs: Crawl sub-URLs found on level 1 URLs
-    level_2_urls, crawled_level_2_urls = crawl_sub_urls(level_1_urls, crawled_level_1_urls)
+    # try:
+    #     # Level 2 URLs: Crawl sub-URLs found on level 1 URLs
+    #     level_2_urls, crawled_level_2_urls = crawl_sub_urls(level_1_urls, crawled_level_1_urls, url_kw)
+    # except:
+    #     level_2_urls = []
+    #     crawled_level_2_urls = []
+
+    # try:
+    #     # Level 3 URLs: Crawl sub-URLs found on level 1 URLs
+    #     level_3_urls, crawled_level_3_urls = crawl_sub_urls(level_2_urls, crawled_level_2_urls, url_kw)   
+    # except:
+    #     level_3_urls = []
+    #     crawled_level_3_urls = []
+
+    # try:
+    #     # Level 4 URLs: Crawl sub-URLs found on level 1 URLs
+    #     level_4_urls, crawled_level_4_urls = crawl_sub_urls(level_3_urls, crawled_level_3_urls, url_kw)        
+    # except:
+    #     level_4_urls = []
+    #     crawled_level_4_urls = []
 
     # Combine all URLs across levels, removing duplicates
-    final_urls = list(dict.fromkeys(url + level_0_urls + level_1_urls + level_2_urls))
+    final_urls = list(dict.fromkeys(url + level_0_urls + level_1_urls))
 
     # Print the final list of unique URLs and their count
     print(final_urls)
-    print(f"Total URLs: {len(final_urls)}")
+    print(f"Total URLs: {len(final_urls)}")    
+
+    # Open the CSV file in write mode ('w'), this will overwrite any existing file
+    with open(file_name, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        
+        # Iterate over each final_url
+        for final_url in final_urls:
+            # Write each URL as a new row
+            writer.writerow([final_url])
